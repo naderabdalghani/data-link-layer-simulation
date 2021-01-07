@@ -17,45 +17,6 @@
 #endif
 
 
-
-/**
- * Class generated from <tt>userMsg.msg:19</tt> by nedtool.
- * <pre>
- * //
- * // TODO generated message class
- * //
- * packet UserMsg
- * {
- *     \@customize(true);  // see the generated C++ header for more info
- *     int someField;
- *     string msg;
- * }
- * </pre>
- *
- * UserMsg_Base is only useful if it gets subclassed, and UserMsg is derived from it.
- * The minimum code to be written for UserMsg is the following:
- *
- * <pre>
- * class UserMsg : public UserMsg_Base
- * {
- *   private:
- *     void copy(const UserMsg& other) { ... }
-
- *   public:
- *     UserMsg(const char *name=nullptr, short kind=0) : UserMsg_Base(name,kind) {}
- *     UserMsg(const UserMsg& other) : UserMsg_Base(other) {copy(other);}
- *     UserMsg& operator=(const UserMsg& other) {if (this==&other) return *this; UserMsg_Base::operator=(other); copy(other); return *this;}
- *     virtual UserMsg *dup() const override {return new UserMsg(*this);}
- *     // ADD CODE HERE to redefine and implement pure virtual functions from UserMsg_Base
- * };
- * </pre>
- *
- * The following should go into a .cc (.cpp) file:
- *
- * <pre>
- * Register_Class(UserMsg)
- * </pre>
- */
 class UserMsg_Base : public ::omnetpp::cPacket
 {
   protected:
@@ -74,9 +35,9 @@ class UserMsg_Base : public ::omnetpp::cPacket
     UserMsg_Base& operator=(const UserMsg_Base& other);
 
   public:
-    UserMsg_Base(const char *name=nullptr, short kind=0);
     virtual ~UserMsg_Base();
-    virtual UserMsg_Base *dup() const override {return new UserMsg_Base (*this);}
+    UserMsg_Base(const char *name=nullptr, short kind=0);
+    virtual UserMsg_Base *dup() const override {return new UserMsg_Base(*this);}
     virtual void parsimPack(omnetpp::cCommBuffer *b) const override;
     virtual void parsimUnpack(omnetpp::cCommBuffer *b) override;
 
