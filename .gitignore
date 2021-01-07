@@ -88,5 +88,6 @@ local.properties
 .scala_dependencies
 .worksheet
 
-# OMNeT++ output older
+# OMNeT++
 out/
+**/messages/*.txt
