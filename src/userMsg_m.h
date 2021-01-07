@@ -1,7 +1,3 @@
-//
-// Generated file, do not edit! Created by nedtool 5.6 from userMsg.msg.
-//
-
 #ifndef __USERMSG_M_H
 #define __USERMSG_M_H
 

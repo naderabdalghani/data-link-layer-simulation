@@ -1,5 +1,5 @@
 packet UserMsg {
-    @customize(true);  // see the generated C++ header for more info
+    @customize(true);
     int someField;
     string msg;
 }
