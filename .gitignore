@@ -91,3 +91,4 @@ local.properties
 # OMNeT++
 out/
 **/messages/*.txt
+.qtenvrc
