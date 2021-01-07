@@ -1,5 +1,5 @@
 //
-// Generated file, do not edit! Created by nedtool 5.6 from userMsg.msg.
+// Generated file, do not edit! Created by nedtool 5.6 from UserMsg.msg.
 //
 
 // Disable warnings about unused variables, empty switch stmts, etc:
@@ -26,7 +26,7 @@
 
 #include <iostream>
 #include <sstream>
-#include "userMsg_m.h"
+#include "UserMsg_m.h"
 
 namespace omnetpp {
 
