@@ -179,7 +179,9 @@ inline std::ostream& operator<<(std::ostream& out, const std::vector<T,A>& vec)
 
 UserMsg_Base::UserMsg_Base(const char *name, short kind) : ::omnetpp::cPacket(name,kind)
 {
-    this->someField = 0;
+    this->type = 0;
+    this->line_nr = 0;
+    this->line_expected = 0;
 }
 
 UserMsg_Base::UserMsg_Base(const UserMsg_Base& other) : ::omnetpp::cPacket(other)
@@ -201,42 +203,68 @@ UserMsg_Base& UserMsg_Base::operator=(const UserMsg_Base& other)
 
 void UserMsg_Base::copy(const UserMsg_Base& other)
 {
-    this->someField = other.someField;
-    this->msg = other.msg;
+    this->type = other.type;
+    this->payload = other.payload;
+    this->line_nr = other.line_nr;
+    this->line_expected = other.line_expected;
 }
 
 void UserMsg_Base::parsimPack(omnetpp::cCommBuffer *b) const
 {
     ::omnetpp::cPacket::parsimPack(b);
-    doParsimPacking(b,this->someField);
-    doParsimPacking(b,this->msg);
+    doParsimPacking(b,this->type);
+    doParsimPacking(b,this->payload);
+    doParsimPacking(b,this->line_nr);
+    doParsimPacking(b,this->line_expected);
 }
 
 void UserMsg_Base::parsimUnpack(omnetpp::cCommBuffer *b)
 {
     ::omnetpp::cPacket::parsimUnpack(b);
-    doParsimUnpacking(b,this->someField);
-    doParsimUnpacking(b,this->msg);
+    doParsimUnpacking(b,this->type);
+    doParsimUnpacking(b,this->payload);
+    doParsimUnpacking(b,this->line_nr);
+    doParsimUnpacking(b,this->line_expected);
 }
 
-int UserMsg_Base::getSomeField() const
+int UserMsg_Base::getType() const
 {
-    return this->someField;
+    return this->type;
 }
 
-void UserMsg_Base::setSomeField(int someField)
+void UserMsg_Base::setType(int type)
 {
-    this->someField = someField;
+    this->type = type;
 }
 
-const char * UserMsg_Base::getMsg() const
+const char * UserMsg_Base::getPayload() const
 {
-    return this->msg.c_str();
+    return this->payload.c_str();
 }
 
-void UserMsg_Base::setMsg(const char * msg)
+void UserMsg_Base::setPayload(const char * payload)
 {
-    this->msg = msg;
+    this->payload = payload;
+}
+
+int UserMsg_Base::getLine_nr() const
+{
+    return this->line_nr;
+}
+
+void UserMsg_Base::setLine_nr(int line_nr)
+{
+    this->line_nr = line_nr;
+}
+
+int UserMsg_Base::getLine_expected() const
+{
+    return this->line_expected;
+}
+
+void UserMsg_Base::setLine_expected(int line_expected)
+{
+    this->line_expected = line_expected;
 }
 
 class UserMsgDescriptor : public omnetpp::cClassDescriptor
@@ -305,7 +333,7 @@ const char *UserMsgDescriptor::getProperty(const char *propertyname) const
 int UserMsgDescriptor::getFieldCount() const
 {
     omnetpp::cClassDescriptor *basedesc = getBaseClassDescriptor();
-    return basedesc ? 2+basedesc->getFieldCount() : 2;
+    return basedesc ? 4+basedesc->getFieldCount() : 4;
 }
 
 unsigned int UserMsgDescriptor::getFieldTypeFlags(int field) const
@@ -319,8 +347,10 @@ unsigned int UserMsgDescriptor::getFieldTypeFlags(int field) const
     static unsigned int fieldTypeFlags[] = {
         FD_ISEDITABLE,
         FD_ISEDITABLE,
+        FD_ISEDITABLE,
+        FD_ISEDITABLE,
     };
-    return (field>=0 && field<2) ? fieldTypeFlags[field] : 0;
+    return (field>=0 && field<4) ? fieldTypeFlags[field] : 0;
 }
 
 const char *UserMsgDescriptor::getFieldName(int field) const
@@ -332,18 +362,22 @@ const char *UserMsgDescriptor::getFieldName(int field) const
         field -= basedesc->getFieldCount();
     }
     static const char *fieldNames[] = {
-        "someField",
-        "msg",
+        "type",
+        "payload",
+        "line_nr",
+        "line_expected",
     };
-    return (field>=0 && field<2) ? fieldNames[field] : nullptr;
+    return (field>=0 && field<4) ? fieldNames[field] : nullptr;
 }
 
 int UserMsgDescriptor::findField(const char *fieldName) const
 {
     omnetpp::cClassDescriptor *basedesc = getBaseClassDescriptor();
     int base = basedesc ? basedesc->getFieldCount() : 0;
-    if (fieldName[0]=='s' && strcmp(fieldName, "someField")==0) return base+0;
-    if (fieldName[0]=='m' && strcmp(fieldName, "msg")==0) return base+1;
+    if (fieldName[0]=='t' && strcmp(fieldName, "type")==0) return base+0;
+    if (fieldName[0]=='p' && strcmp(fieldName, "payload")==0) return base+1;
+    if (fieldName[0]=='l' && strcmp(fieldName, "line_nr")==0) return base+2;
+    if (fieldName[0]=='l' && strcmp(fieldName, "line_expected")==0) return base+3;
     return basedesc ? basedesc->findField(fieldName) : -1;
 }
 
@@ -358,8 +392,10 @@ const char *UserMsgDescriptor::getFieldTypeString(int field) const
     static const char *fieldTypeStrings[] = {
         "int",
         "string",
+        "int",
+        "int",
     };
-    return (field>=0 && field<2) ? fieldTypeStrings[field] : nullptr;
+    return (field>=0 && field<4) ? fieldTypeStrings[field] : nullptr;
 }
 
 const char **UserMsgDescriptor::getFieldPropertyNames(int field) const
@@ -426,8 +462,10 @@ std::string UserMsgDescriptor::getFieldValueAsString(void *object, int field, in
     }
     UserMsg_Base *pp = (UserMsg_Base *)object; (void)pp;
     switch (field) {
-        case 0: return long2string(pp->getSomeField());
-        case 1: return oppstring2string(pp->getMsg());
+        case 0: return long2string(pp->getType());
+        case 1: return oppstring2string(pp->getPayload());
+        case 2: return long2string(pp->getLine_nr());
+        case 3: return long2string(pp->getLine_expected());
         default: return "";
     }
 }
@@ -442,8 +480,10 @@ bool UserMsgDescriptor::setFieldValueAsString(void *object, int field, int i, co
     }
     UserMsg_Base *pp = (UserMsg_Base *)object; (void)pp;
     switch (field) {
-        case 0: pp->setSomeField(string2long(value)); return true;
-        case 1: pp->setMsg((value)); return true;
+        case 0: pp->setType(string2long(value)); return true;
+        case 1: pp->setPayload((value)); return true;
+        case 2: pp->setLine_nr(string2long(value)); return true;
+        case 3: pp->setLine_expected(string2long(value)); return true;
         default: return false;
     }
 }

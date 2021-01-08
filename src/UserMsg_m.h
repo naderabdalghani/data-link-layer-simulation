@@ -24,8 +24,10 @@
  * packet UserMsg
  * {
  *     \@customize(true);
- *     int someField;
- *     string msg;
+ *     int type;	// 0-> from hub to nodes first time, 1-> message to node, 2-> ACK for node, 3-> NACk for node
+ *     string payload;
+ *     int line_nr;
+ *     int line_expected;
  * }
  * </pre>
  *
@@ -56,8 +58,10 @@
 class UserMsg_Base : public ::omnetpp::cPacket
 {
   protected:
-    int someField;
-    ::omnetpp::opp_string msg;
+    int type;
+    ::omnetpp::opp_string payload;
+    int line_nr;
+    int line_expected;
 
   private:
     void copy(const UserMsg_Base& other);
@@ -66,6 +70,7 @@ class UserMsg_Base : public ::omnetpp::cPacket
     // protected and unimplemented operator==(), to prevent accidental usage
     bool operator==(const UserMsg_Base&);
     // make constructors protected to avoid instantiation
+
     UserMsg_Base(const UserMsg_Base& other);
     // make assignment operator protected to force the user override it
     UserMsg_Base& operator=(const UserMsg_Base& other);
@@ -78,10 +83,14 @@ class UserMsg_Base : public ::omnetpp::cPacket
     virtual void parsimUnpack(omnetpp::cCommBuffer *b) override;
 
     // field getter/setter methods
-    virtual int getSomeField() const;
-    virtual void setSomeField(int someField);
-    virtual const char * getMsg() const;
-    virtual void setMsg(const char * msg);
+    virtual int getType() const;
+    virtual void setType(int type);
+    virtual const char * getPayload() const;
+    virtual void setPayload(const char * payload);
+    virtual int getLine_nr() const;
+    virtual void setLine_nr(int line_nr);
+    virtual int getLine_expected() const;
+    virtual void setLine_expected(int line_expected);
 };
 
 
