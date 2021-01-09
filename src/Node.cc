@@ -6,23 +6,103 @@
 #include <random>
 #include <fstream>
 
-const char *messages_directory = "./../src/messages"; // Messages directory
-int interval = 5;                                     // Message interval
-int maxSeq = 7; // Max sequence
-int windowSize = (maxSeq + 1) / 2; // Windows size
-float timeLimit = 1.125;
-typedef enum {recieveData, recieveTable, sendMessage, err, timeout, ackTimeout, end} eventType;
+const char *messagesDirectory = "./../src/messages"; // Messages directory
+int interval = 5;                                    // Message interval
+int maxSeq = 7;                                      // Max sequence
+int windowSize = (maxSeq + 1) / 2;                   // Windows size
+float maxTimeLimit = 2;                              // Time limit for receiving ack
+float epsilon = 0.0005;                              // Small time between the first send from the first node and first send from the second node
+
+typedef enum
+{
+    recieveData,
+    recieveTable,
+    sendMessage,
+    err,
+    timeout,
+    ackTimeout,
+    end
+} eventType;
+
+typedef enum
+{
+    tableEnum,        // From hub to nodes in initialize
+    dataEnum,         // Data from another node
+    nakEnum,          // Nack signal from receiver
+    ackTimeOutEnum,   // Ack time (receiver)
+    timeOutEnum,      // Time out (sender)
+    selfMsgEnum,      // From node to itself
+    ackEnum,          // Ack enum
+    endEnum           // End transmission
+} receivedMsgType;
 
 Define_Module(Node);
+
+void inc(int &a)
+{
+    return a + 1 <= maxSeq ? a + 1 : 0;
+}
+bool between(int a, int b, int c)
+{ /* Same as between in protocol 5, but shorter and more obscure. */
+    return ((a <= b) && (b < c))((c < a) && (a <= b))((b < c) && (c < a));
+}
+
+void Node::startAckTimer()
+{
+    cancelAndDelete(ackTimeout);
+    ackTimeout = new UserMsg_Base("");
+    ackTimeout->setType(ackTimeOutEnum);
+    scheduleAt(simTime() + maxTimeLimit, ackTimeout);
+}
+
+void Node::stopAckTimer()
+{
+    cancelAndDelete(ackTimeout);
+}
+
+void Node::startTimer(int index)
+{
+    cancelAndDelete(timeout[index]);
+    timeout[index] = new UserMsg_Base("");
+    timeout[index]->setType(timeOutEnum);
+    scheduleAt(simTime() + maxTimeLimit, timeout[index]);
+}
+
+void Node::stopTimer(int index)
+{
+    cancelAndDelete(timeout[index]);
+}
+
+void sendFrame(int frameType, int frameNum, int frameExp)
+{
+    UserMsg_Base *newMsg = new UserMsg_Base("");
+    newMsg->setType(frameType);
+    if (frameType == dataEnum)
+    {
+        newMsg->setPayload(sendBuffer[frameNum % windowSize]);
+    }
+    newMsg->setLine_nr(frameNum);
+    newMsg->setLine_expected((frameExp + maxSeq) % (maxSeq + 1));
+    if (frameType == nakEnum)
+    {
+        noNak = false;
+    }
+    send(newMsg, receiver);
+    if (frameType == dataEnum)
+    {
+        startTimer(frameNum % windowSize);
+    }
+    stopAckTimer();
+}
 
 // Returns all file names in messages directory
 vector<char *> Node::getMessageFiles()
 {
-    // Reading files in the "Msg files" directory and save them in files vector
+    // Reading files in the "messages" directory and save them in files vector
     DIR *dir;
     struct dirent *diread;
     vector<char *> files; // Will contain the message files form message directory
-    if ((dir = opendir(messages_directory)) != nullptr)
+    if ((dir = opendir(messagesDirectory)) != nullptr)
     {
         while ((diread = readdir(dir)) != nullptr)
         {
@@ -68,12 +148,19 @@ void Node::notifyNodes()
         auto rng = default_random_engine{};
         shuffle(begin(files), end(files), rng);
         msg = new UserMsg_Base("");
-        msg->setType(0); // Message type is 0 for first message from hub to nodes
+        msg->setType(tableEnum); // Message type is 0 for first message from hub to nodes
         int time = interval * i + margin;
         string s = to_string(table[i].second) + "-" + files[0] + "-" + to_string(time);
         msg->setPayload(s.c_str()); // Pay load will be in type ("dest-file_name-time")
         send(msg, "outs", table[i].first);
         files.erase(files.begin());
+        if (!files.empty())
+        {
+            s = to_string(table[i].first) + "-" + files[0] + "-" + to_string(time + epsilon);
+            msg->setPayload(s.c_str()); // Pay load will be in type ("dest-file_name-time")
+            send(msg, "outs", table[i].second);
+            files.erase(files.begin());
+        }
         i++;
     }
 }
@@ -83,7 +170,7 @@ vector<string> Node::readFile(string fileName)
 {
     vector<string> lines;
     fstream newfile;
-    newfile.open(messages_directory + fileName, ios::in); // Open a file to perform read operation using file object
+    newfile.open(messagesDirectory + fileName, ios::in); // Open a file to perform read operation using file object
     if (newfile.is_open())
     { // Checking whether the file is open
         string tp;
@@ -96,7 +183,6 @@ vector<string> Node::readFile(string fileName)
     return lines;
 }
 
-
 void Node::initialize()
 {
     // Check if this node is hub
@@ -106,6 +192,26 @@ void Node::initialize()
         files = getMessageFiles();
         table = createTable(files.size());
         notifyNodes();
+    }
+    else
+    {
+        frameExpected = 0;
+        ackExpected = 0;
+        nextFrameToSend = 0;
+        tooFar = windowSize;
+        lastAck = 0;
+        receiver = -1;
+        lineToSendToSendBuffer = 0;
+        noNak = true;
+        nBuffered = 0;
+        oldestFrame = maxSeq + 1;
+        for (int i = 0; i < windowSize; i++)
+        {
+            arrived.push_back(false);
+            receiveBuffer.push_back("");
+            sendBuffer.push_back("");
+            timeout.push_back(NULL);
+        }
     }
 }
 
@@ -134,78 +240,74 @@ void Node::handleMessage(cMessage *cmsg)
     // For all nodes except hub
     else
     {
-        vector<string> lines;
-        vector <pair <int , clock_t >> sentAckTimeout; // Keep track of sent messages that yet not have ack
-        vector <int> recievedLines; // Keep track of received lines
-        clock_t receiveTimeout ; // Keep track of time that i dont receive anything
-        int sf,sn,sl; // First, Now, Last
-        while (true){
-            if( !msg->SelfMessage() && msg->Type == 0 ) // Receive first time from hub
-                eventType = recieveTable;
-            else if (!msg->SelfMessage() && msg->Type == 1) // Receive data
-                eventType = recieveData;
-            else if (timeout.size() != 0 && float(clock () - timeout[0].second)  >= timeLimit) // Check on first line you send and yet didn't receive ack
-            {
-                eventType = ackTimeout;
-            }
-            else if (false) // Hamming == true
-            {
-                eventType = err;
-            }
-            else if (float(clock ()-timeout)){
-                eventType = timeout;
-            }
-            else if (sn < lines.size())
-                eventType = sendMessage;
-            else
-                eventType = end;
-            switch (eventType){
-
-            }
-        }
-
-
-
-        if (msg->isSelfMessage())// Sender
+        switch (msg->getType())
         {
+        case tableEnum: // Receive (receiver and file to read from)
             vector<string> stringArray;
-            stringstream s(msg->getPayload());
+            stringstream s(msg->getName());
             string value;
             while (getline(s, value, '-'))
             {
                 stringArray.push_back(value);
             }
-            vector<string> lines = readFile(stringArray[1]);
-            delete msg;
-
-            for (int i = 0; i < lines.size(); i++)
+            receiver = atoi(stringArray[0].c_str());  // Get the receiver index
+            lines = readFile(stringArray[1].c_str()); // Get lines from file
+            UserMsg_Base *selfMsg = new UserMsg_Base();
+            selfMsg->setType(selfMsgEnum);                                 // Set type to be self message
+            scheduleAt(simTime() + atoi(stringArray[2].c_str()), selfMsg); // Send self msg at the time generated by hub
+            break;
+        case dataEnum: // Receive message
+            if ((msg->getLine_nr() != frameExpected) && noNak)
             {
-                string srcDest = to_string(getIndex()) + '-' + stringArray[0];// (src , destination)
-                msg = new UserMsg_Base(srcDest.c_str());
-                msg->setPayload(lines[i].c_str());
-                send(msg, "outs", 0);
+                UserMsg_Base *newMsg = new UserMsg_Base("");
+                newMsg->setType(nakEnum);
+                newMsg->setLine_expected(frameExpected); // TODO: Send frame expected in noisy channel
+                sendFrame(nakEnum, 0, frameExpected);
             }
-            EV << "Node : " << to_string(getIndex()) << " send file : " << stringArray[1] << " to Node : " << stringArray[0] << "\n";
-        }
-        else // Receiver
-        {
-            if (msg->getType() == 0)
-            {
-                vector<string> stringArray;
-                stringstream s(msg->getPayload());
-                string value;
-                while (getline(s, value, '-'))
-                {
-                    stringArray.push_back(value);
-                }
-                string destFileName = stringArray[0] + '-' + stringArray[1]; // (dest,filename)
-                scheduleAt(atoi(stringArray[2].c_str()), new UserMsg_Base(destFileName.c_str()));
-            }
-            if (atoi(msg->getName()) == getIndex())
-                bubble("Message received");
             else
-                bubble("Wrong destination");
-            delete msg;
+            {
+                startAckTimer();
+            }
+            if (between(frameExpected, msg->getLine_nr(), tooFar) && arrived[msg->getLine_nr() % windowSize] == false)
+            {
+                arrived[msg->getLine_nr() % windowSize] = true;
+                receiveBuffer[msg->getLine_nr() % windowSize] = msg->getPayload();
+                while (arrived[frameExpected % windowSize])
+                {
+                    bubble(receiveBuffer[frameExpected % windowSize]); // Send to network layer
+                    noNak = true;
+                    arrived[frameExpected % windowSize] = false;
+                    inc(frameExpected);
+                    inc(tooFar);
+                    startAckTimer();
+                }
+            }
+            while (between(ackExpected, msg->getLine_expected(), nextFrameToSend))
+            {
+                nBuffered--;
+                stopTimer(ackExpected % windowSize);
+                inc(ackExpected);
+            }
+            break;
+        case nakEnum:
+            if (between(ackExpected, (msg->getLine_expected() + 1) % (maxSeq + 1), nextFrameToSend))
+            {
+                sendFrame(dataEnum, (msg->getLine_expected() + 1) % (maxSeq + 1), frameExpected); // Send frame that we recevied nak for
+            }
+            while (between(ackExpected, msg->getLine_expected(), nextFrameToSend))
+            {
+                nBuffered--;
+                stopTimer(ackExpected % windowSize);
+                inc(ackExpected);
+            }
+            break;
+        case timeOutEnum:
+            sendFrame(dataEnum, oldestFrame, frameExpected);
+            break;
+        case ackTimeout:
+            sendFrame(ackEnum, 0, frameExpected);
+        default:
+            break;
         }
     }
 }
