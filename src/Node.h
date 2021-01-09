@@ -2,6 +2,7 @@
 #define __STAR_NODE_H_
 
 #include <omnetpp.h>
+#include "UserMsg_m.h"
 
 using namespace omnetpp;
 using namespace std;
@@ -15,7 +16,6 @@ private:
   vector<string> sendBuffer;      // Keep track of sent messages that yet not have ack
   int lastAck;                    // Contains the last acknowledge received
   int receiver;                   // Receiver index
-  int lineToSendToSendBuffer;     // Next line to move to send buffer
   int frameExpected;              // Next frame to be received (lower edge for receiver widnow)
   int tooFar;                     // Upper edge of receiver window + 1
   bool noNak;                     // No negative ack
@@ -37,7 +37,7 @@ protected:
   vector<string> readFile(string fileName);
   void startAckTimer(); // Receiver
   void stopAckTimer();  // Receiver
-  void sendFrame(int frameType, int frameNum, int frameExp, string payload);
+  void sendFrame(int frameType, int frameNum, int frameExp);
   void startTimer(int index); // Sender
   void stopTimer(int index);  // Sender
 };
