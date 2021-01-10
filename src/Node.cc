@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <random>
 #include <fstream>
+#include <bitset>
 
 const char *messagesDirectory = "./../src/messages/"; // Messages directory
 int maxSeq = 7;                                       // Max sequence
@@ -11,6 +12,8 @@ int windowSize = (maxSeq + 1) / 2;                    // Windows size
 float maxTimeLimitAck = 2;                            // Time limit for receiving ack
 float maxTimeLimitNak = 3;                            // Time limit for receiving nak
 int margin = 1;                                       // Margin time
+string frame = "10000001";                            // Start and end frames
+
 typedef enum
 {
     tableEnum,      // From hub to nodes in initialize
@@ -25,6 +28,234 @@ typedef enum
 
 Define_Module(Node);
 
+// ------------------------------------------------------- Convert to/from bits ----------------------------------------------
+string TextToBinaryString(string words)
+{
+    string binaryString = "";
+    for (char &_char : words)
+    {
+        binaryString += bitset<8>(_char).to_string();
+    }
+    return binaryString;
+}
+
+// Returns message parameters as string of bits
+string castMsgIntoBits(UserMsg_Base *msg)
+{
+    string messageBits = "";
+    // First 8 bits -> line number, second 8 -> line expected, third part -> payload
+    messageBits += bitset<8>(msg->getLine_nr()).to_string();       // Line number
+    messageBits += bitset<8>(msg->getLine_expected()).to_string(); // Line expected
+    messageBits += TextToBinaryString(msg->getPayload());          // Payload
+    return messageBits;
+}
+
+// Returns message from bits to its parameters
+void castBitsIntoMsg(UserMsg_Base *msg)
+{
+    // First 8 bits -> line number, second 8 -> line expected, third part -> payload
+    string strTmp = msg->getPayload();
+    msg->setLine_nr(bitset<8>(strTmp.substr(0, 8)).to_ulong()); // Line number
+    msg->setLine_expected(bitset<8>(strTmp.substr(8, 8)).to_ulong()); // Line expected
+    int index = 16;
+    string payload;
+    while (index < int(strTmp.size()))
+    {
+        char c = (char)bitset<8>(strTmp.substr(index, 8)).to_ulong();
+        payload.push_back(c);
+        index += 8;
+    }
+    msg->setPayload(payload.c_str());
+}
+// ----------------------------------------------------------------------------------------------------------------------------
+
+// -------------------------------------------------- Bit stuffing and Hamming functions --------------------------------------
+string bitStuff(string msg)
+{
+    string msgnew = "";
+    int j = 0;
+    for (int i = 0; i < int(msg.size()); i++)
+    {
+        if (msg[i] == frame[j])
+        {
+            j++;
+            if (j == int(frame.size()) - 1)
+            {
+                msgnew.push_back(msg[i]);
+                msgnew.push_back('0');
+                j = 0;
+                continue;
+            }
+        }
+        else
+        {
+            if (msg[i] == frame[0])
+                j = 1;
+            else
+                j = 0;
+        }
+
+        msgnew.push_back(msg[i]);
+    }
+    return frame + msgnew + frame;
+}
+string calcParity(string msg, int position)
+{
+    int count = 0;
+    int i = position;
+    int temp = i;
+    while (i < int(msg.size()))
+    {
+        for (i; (i < temp + position + 1) && (i < msg.size()); i++)
+        {
+            if (msg[i] == '1')
+            {
+                count++;
+            }
+        }
+        i = i + (position + 1);
+        temp = i;
+    }
+
+    if (count % 2 == 0)
+        msg[position] = '0';
+    else
+        msg[position] = '1';
+    return msg;
+}
+bool checkParity(string msg, int position)
+{
+    int count = 0;
+    int i = position;
+    int temp = i;
+    while (i < msg.size())
+    {
+        for (i; (i < temp + position + 1) && (i < msg.size()); i++)
+        {
+            if (msg[i] == '1')
+            {
+                count++;
+            }
+        }
+        i = i + (position + 1);
+        temp = i;
+    }
+
+    if (count % 2 == 0)
+        return false;
+    else
+        return true;
+}
+string hammingCode(string msg)
+{
+    int r = 0;
+    while (msg.size() + r + 1 > pow(2, r))
+        r++;
+
+    string newmsg = "";
+    int k = 0, l = 0;
+    for (unsigned int i = 0; i < msg.size() + r; i++)
+    {
+        int temp = pow(2, l) - 1;
+        if (i == temp)
+        {
+            newmsg.push_back('0');
+            l++;
+        }
+        else
+        {
+            newmsg.push_back(msg[k]);
+            k++;
+        }
+    }
+    int i = 0;
+    l = 0;
+    while (i < int(newmsg.size()))
+    {
+        newmsg = calcParity(newmsg, i);
+        l++;
+        i = pow(2, l) - 1;
+    }
+    return newmsg;
+}
+string inverseBitStuff(string msg)
+{
+    string msgnew = "";
+    int j = 0;
+    for (int i = 0; i < int(msg.size()); i++)
+    {
+        if (msg[i] == frame[j])
+        {
+            j++;
+            if (j == int(frame.size()) - 1)
+            {
+                msgnew.push_back(msg[i]);
+                i++;
+                j = 0;
+                continue;
+            }
+        }
+        else
+        {
+            if (msg[i] == frame[0])
+                j = 1;
+            else
+                j = 0;
+        }
+
+        msgnew.push_back(msg[i]);
+    }
+    return msgnew;
+}
+int checkHamming(string msg)
+{
+    int i = 0;
+    int l = 0;
+    vector<int> wrong;
+    while (i < int(msg.size()))
+    {
+        int position = i + 1;
+        if (checkParity(msg, i))
+        {
+            wrong.push_back(position);
+        }
+
+        l++;
+        i = pow(2, l) - 1;
+    }
+    int sum = 0;
+    for (int i = 0; i < int(wrong.size()); i++)
+        sum += wrong[i];
+    return sum;
+}
+string correctHamming(string msg, int position)
+{
+    if (msg[position] == '0')
+        msg[position] = '1';
+    else
+        msg[position] = '0';
+    return msg;
+}
+string removeHamming(string msg)
+{
+    string newmsg;
+    int i = 0, l = 0;
+    while (i < int(msg.size()))
+    {
+        if (i == pow(2, l) - 1)
+        {
+            i++;
+            l++;
+            continue;
+        }
+        newmsg.push_back(msg[i]);
+        i++;
+    }
+    return newmsg;
+}
+// --------------------------------------------------------------------------------------------------------------------------------
+
+// ---------------------------------------------- Selective repeat and distributed functions --------------------------------------
 void inc(int &a)
 {
     a = a + 1 <= maxSeq ? a + 1 : 0;
@@ -97,8 +328,12 @@ void Node::sendFrame(int frameType, int frameNum, int frameExp)
     {
         EV << "Node #" << getIndex() << " sent ACK = " << newMsg->getLine_expected() << " \n";
     }
-    if(frameType != endEnum)
+    if (frameType != endEnum)
         stopAckTimer();
+    string payload = castMsgIntoBits(newMsg); // Set payload as a bit string and send the message
+    payload = hammingCode(payload);           // Apply Hamming code
+    payload = bitStuff(payload);
+    newMsg->setPayload(payload.c_str());
     double rand = uniform(0, 100);
     if (rand <= par("duplicatingProbability").doubleValue()) {
         UserMsg_Base *duplicateMsg = newMsg->dup();
@@ -251,6 +486,27 @@ void Node::handleMessage(cMessage *cmsg)
     // For all nodes except hub
     else
     {
+        string payload = msg->getPayload();
+        if (payload.size() > 2 * frame.size())
+        {
+            payload = payload.substr(frame.size(), payload.size() - 2 * frame.size()); // Remove frames
+            payload = inverseBitStuff(payload);
+            int t = checkHamming(payload); // Location of the wrong bit
+            if (t != 0 && t < int(payload.size()))
+            {
+                payload = correctHamming(payload, t - 1);
+            }
+            t = checkHamming(payload);
+            if (t != 0)
+            {
+                EV << "Corrupted frame\n";
+            }
+            payload = removeHamming(payload); // Remove added bits for hamming
+            msg->setPayload(payload.c_str());
+            castBitsIntoMsg(msg); // Get the msg data
+        }
+
+        // Now we have our ordinary msg
         switch (msg->getType())
         {
         case tableEnum: // Receive (receiver and file to read from)
