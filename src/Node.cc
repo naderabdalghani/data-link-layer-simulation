@@ -99,6 +99,12 @@ void Node::sendFrame(int frameType, int frameNum, int frameExp)
     }
     if(frameType != endEnum)
         stopAckTimer();
+    double rand = uniform(0, 100);
+    if (rand <= par("duplicatingProbability").doubleValue()) {
+        UserMsg_Base *duplicateMsg = newMsg->dup();
+        send(duplicateMsg, "outs", 0);
+        EV << "Message duplicated" << endl;
+    }
     send(newMsg, "outs", 0);
 }
 
@@ -196,6 +202,7 @@ void Node::initialize()
     // Check if this node is hub
     if (strcmp(getName(), "hub") == 0)
     {
+        lastEndReceiver = -1;
         // Get file messages from directory messages
         getMessageFiles();
         createTable(files.size());
@@ -219,22 +226,25 @@ void Node::handleMessage(cMessage *cmsg)
         }
         else
         {
-            EV << "One node ended\n";
-            numEndInHub++;
-            send(msg, "outs", atoi(msg->getName()));
-            if (numEndInHub >= 2)
-            {
-                EV << "End Pair";
-                if (!table.empty())
+            if (lastEndReceiver != atoi(msg->getName())) {
+                EV << "One node ended\n";
+                numEndInHub++;
+                send(msg, "outs", atoi(msg->getName()));
+                if (numEndInHub >= 2)
                 {
-                    numEndInHub = 0;
-                    notifyNodes(table[0]);
-                    table.erase(table.begin());
+                    EV << "End Pair";
+                    if (!table.empty())
+                    {
+                        numEndInHub = 0;
+                        notifyNodes(table[0]);
+                        table.erase(table.begin());
+                    }
+                    else
+                    {
+                        EV << "Transmission done for all nodes!!!\n";
+                    }
                 }
-                else
-                {
-                    EV << "Transmission done for all nodes!!!\n";
-                }
+                lastEndReceiver = atoi(msg->getName());
             }
         }
     }

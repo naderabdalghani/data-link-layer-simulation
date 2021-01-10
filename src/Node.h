@@ -29,8 +29,9 @@ private:
   int oldestFrame;                // Oldest frame in the send buffer
   int numEndInHub;                // Shows the count of nodes that want to end transimission (transimssion is ended if numEndInHub = 2)
   bool stopSendingData;           // Stop sending data from node
-  int numSelfMsg;                 // Nomber of self msg sent by the node
+  int numSelfMsg;                 // Number of self msg sent by the node
   simtime_t lastSend;             // The last message scheduled to be sent
+  int lastEndReceiver;          // Carries the id of the last receiver to receive an end signal
 
 protected:
   virtual void initialize();

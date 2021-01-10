@@ -3,7 +3,7 @@ package data_link_layer_simulation;
 simple Node
 {
     parameters:
-        double lambda = default(2.0);
+        double duplicatingProbability = default(50.0);
     gates:
         input ins[];
         output outs[];
