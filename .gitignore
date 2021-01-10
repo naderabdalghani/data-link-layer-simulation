@@ -90,6 +90,5 @@ local.properties
 
 # OMNeT++
 out/
-**/messages/*.txt
 .qtenvrc
 data-link-layer-simulation_dbg
