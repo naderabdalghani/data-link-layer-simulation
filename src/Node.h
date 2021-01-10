@@ -10,7 +10,7 @@ using namespace std;
 class Node : public cSimpleModule
 {
 private:
-  vector<char *> files;           // Contains the files in messages directory
+  vector<string> files;           // Contains the files in messages directory
   vector<pair<int, int>> table;   // Contains the pairs of nodes that will communicate
   vector<string> lines;           // Contains file lines to be sent
   vector<string> sendBuffer;      // Keep track of sent messages that yet not have ack
@@ -27,19 +27,23 @@ private:
   int nextFrameToSend;            // Upper edge for sender window + 1
   int nBuffered;                  // Number of buffered backets in send buffer
   int oldestFrame;                // Oldest frame in the send buffer
+  int numEndInHub;                // Shows the count of nodes that want to end transimission (transimssion is ended if numEndInHub = 2)
+  bool stopSendingData;           // Stop sending data from node
+  int numSelfMsg;                 // Nomber of self msg sent by the node
+  simtime_t lastSend;             // The last message scheduled to be sent
 
 protected:
   virtual void initialize();
   virtual void handleMessage(cMessage *msg);
-  vector<char *> getMessageFiles();
-  vector<pair<int, int>> createTable(int filesCount);
-  void notifyNodes();
-  vector<string> readFile(string fileName);
+  void getMessageFiles();
+  void createTable(int filesCount);
+  void notifyNodes(pair<int, int>);
+  void readFile(string fileName);
   void startAckTimer(); // Receiver
   void stopAckTimer();  // Receiver
   void sendFrame(int frameType, int frameNum, int frameExp);
-  void startTimer(int index); // Sender
-  void stopTimer(int index);  // Sender
+  void startTimer(int index, int frameNumber); // Sender
+  void stopTimer(int index);                   // Sender
 };
 
 #endif

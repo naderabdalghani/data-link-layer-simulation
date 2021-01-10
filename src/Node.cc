@@ -5,13 +5,12 @@
 #include <random>
 #include <fstream>
 
-const char *messagesDirectory = "./../src/messages"; // Messages directory
-int interval = 5;                                    // Message interval
-int maxSeq = 7;                                      // Max sequence
-int windowSize = (maxSeq + 1) / 2;                   // Windows size
-float maxTimeLimit = 2;                              // Time limit for receiving ack
-float epsilon = 0.0005;                              // Small time between the first send from the first node and first send from the second node
-
+const char *messagesDirectory = "./../src/messages/"; // Messages directory
+int maxSeq = 7;                                       // Max sequence
+int windowSize = (maxSeq + 1) / 2;                    // Windows size
+float maxTimeLimitAck = 2;                            // Time limit for receiving ack
+float maxTimeLimitNak = 3;                            // Time limit for receiving nak
+int margin = 1;                                       // Margin time
 typedef enum
 {
     tableEnum,      // From hub to nodes in initialize
@@ -37,59 +36,78 @@ bool between(int a, int b, int c)
 
 void Node::startAckTimer()
 {
-    cancelAndDelete(ackTimeout);
+    stopAckTimer();
+    EV << "Node #" << getIndex() << " : has started ACK timer \n";
     ackTimeout = new UserMsg_Base("");
     ackTimeout->setType(ackTimeOutEnum);
-    scheduleAt(simTime() + maxTimeLimit, ackTimeout);
+    scheduleAt(simTime() + maxTimeLimitAck, ackTimeout);
 }
 
 void Node::stopAckTimer()
 {
-    cancelAndDelete(ackTimeout);
+    if (ackTimeout)
+    {
+        EV << "Node #" << getIndex() << " : has stopped ACK timer \n";
+        cancelAndDelete(ackTimeout);
+        ackTimeout = NULL;
+    }
 }
 
-void Node::startTimer(int index)
+void Node::startTimer(int index, int frameNumber)
 {
-    cancelAndDelete(timeout[index]);
+    stopTimer(index);
+    EV << "Node #" << getIndex() << " : has started frame timer with SQN =  " << frameNumber << "\n";
     timeout[index] = new UserMsg_Base("");
     timeout[index]->setType(timeOutEnum);
-    scheduleAt(simTime() + maxTimeLimit, timeout[index]);
+    timeout[index]->setLine_nr(frameNumber);
+    scheduleAt(simTime() + maxTimeLimitNak, timeout[index]);
 }
 
 void Node::stopTimer(int index)
 {
-    cancelAndDelete(timeout[index]);
+    if (timeout[index])
+    {
+        EV << "Node #" << getIndex() << " : has stopped frame timer with SQN =  " << timeout[index]->getLine_nr() << "\n";
+        cancelAndDelete(timeout[index]);
+        timeout[index] = NULL;
+    }
 }
 
 void Node::sendFrame(int frameType, int frameNum, int frameExp)
 {
     UserMsg_Base *newMsg = new UserMsg_Base(to_string(receiver).c_str());
     newMsg->setType(frameType);
+    newMsg->setLine_nr(frameNum);
+    newMsg->setLine_expected((frameExp + maxSeq) % (maxSeq + 1));
     if (frameType == dataEnum)
     {
         newMsg->setPayload(sendBuffer[frameNum % windowSize].c_str());
+        EV << "Node #" << getIndex() << " send \"" << newMsg->getPayload() << "\" with SQN = " << newMsg->getLine_nr() << " and ACK = " << newMsg->getLine_expected() << " \n";
     }
-    newMsg->setLine_nr(frameNum);
-    newMsg->setLine_expected((frameExp + maxSeq) % (maxSeq + 1));
     if (frameType == nakEnum)
     {
         noNak = false;
+        EV << "Node #" << getIndex() << " sent NAK with ACK = " << newMsg->getLine_expected() << " \n";
     }
-    send(newMsg, "outs", 0);
-    if (frameType == dataEnum)
+    if (frameType == dataEnum && !stopSendingData)
     {
-        startTimer(frameNum % windowSize);
+        startTimer(frameNum % windowSize, frameNum);
     }
-    stopAckTimer();
+    if (frameType == ackEnum)
+    {
+        EV << "Node #" << getIndex() << " sent ACK = " << newMsg->getLine_expected() << " \n";
+    }
+    if(frameType != endEnum)
+        stopAckTimer();
+    send(newMsg, "outs", 0);
 }
 
 // Returns all file names in messages directory
-vector<char *> Node::getMessageFiles()
+void Node::getMessageFiles()
 {
     // Reading files in the "messages" directory and save them in files vector
     DIR *dir;
     struct dirent *diread;
-    vector<char *> files; // Will contain the message files form message directory
     if ((dir = opendir(messagesDirectory)) != nullptr)
     {
         while ((diread = readdir(dir)) != nullptr)
@@ -103,13 +121,11 @@ vector<char *> Node::getMessageFiles()
         }
         closedir(dir);
     }
-    return files;
 }
 
 // Returns a table of 2 nodes that will send to each others first will send and second will receive
-vector<pair<int, int>> Node::createTable(int filesCount)
+void Node::createTable(int filesCount)
 {
-    vector<pair<int, int>> table;
     int src = 0, dest;
     int halfFilesCount = filesCount / 2;
     while (halfFilesCount > 0)
@@ -123,43 +139,47 @@ vector<pair<int, int>> Node::createTable(int filesCount)
         table.push_back(pair<int, int>(src++, dest));
         halfFilesCount--;
     }
-    return table;
 };
 
 // Send msg to all nodes to tell them the file they will send from and node it will send to
-void Node::notifyNodes()
+void Node::notifyNodes(pair<int, int> nodes)
 {
     UserMsg_Base *msg;
-    int i = 0;
-    int margin = 1; // Start the first send after 1 second
-    while (!files.empty())
+    if (!files.empty())
     {
         auto rng = default_random_engine{};
         shuffle(begin(files), end(files), rng);
-        int time = interval * i + margin;
-        string s = to_string(table[i].second) + "-" + files[0] + "-" + to_string(time);
-        msg = new UserMsg_Base(s.c_str()); // Name will be in type ("dest-file_name-time")
-        msg->setType(tableEnum); // Message type is 0 for first message from hub to nodes
-        send(msg, "outs", table[i].first);
+        string s = to_string(nodes.second) + "-" + files[0];
+        msg = new UserMsg_Base(s.c_str()); // Name will be in type ("dest-file_name")
+        msg->setType(tableEnum);           // Message type is 0 for first message from hub to nodes
+        msg->setPayload(s.c_str());
+        send(msg, "outs", nodes.first);
         files.erase(files.begin());
         if (!files.empty())
         {
-            s = to_string(table[i].first) + "-" + files[0] + "-" + to_string(time + epsilon);
-            msg = new UserMsg_Base(s.c_str()); // Name will be in type ("dest-file_name-time")
+            s = to_string(nodes.first) + "-" + files[0];
+            msg = new UserMsg_Base(s.c_str()); // Name will be in type ("dest-file_name")
             msg->setType(tableEnum);
-            send(msg, "outs", table[i].second);
+            msg->setPayload(s.c_str());
+            send(msg, "outs", nodes.second);
             files.erase(files.begin());
         }
-        i++;
+        else // Handle odd number of files
+        {
+            numEndInHub = 1;
+            msg = new UserMsg_Base("");
+            msg->setType(endEnum);
+            send(msg, "outs", nodes.first);
+        }
     }
 }
 
 // Returns all lines of the file in a sting vector
-vector<string> Node::readFile(string fileName)
+void Node::readFile(string fileName)
 {
-    vector<string> lines;
     fstream newfile;
-    newfile.open(messagesDirectory + fileName, ios::in); // Open a file to perform read operation using file object
+    string openFile = string(messagesDirectory) + fileName;
+    newfile.open(openFile, ios::in); // Open a file to perform read operation using file object
     if (newfile.is_open())
     { // Checking whether the file is open
         string tp;
@@ -169,7 +189,6 @@ vector<string> Node::readFile(string fileName)
         }
         newfile.close(); // Close the file object.
     }
-    return lines;
 }
 
 void Node::initialize()
@@ -178,28 +197,11 @@ void Node::initialize()
     if (strcmp(getName(), "hub") == 0)
     {
         // Get file messages from directory messages
-        files = getMessageFiles();
-        table = createTable(files.size());
-        notifyNodes();
-    }
-    else
-    {
-        frameExpected = 0;
-        ackExpected = 0;
-        nextFrameToSend = 0;
-        tooFar = windowSize;
-        lastAck = 0;
-        receiver = -1;
-        noNak = true;
-        nBuffered = 0;
-        oldestFrame = maxSeq + 1;
-        for (int i = 0; i < windowSize; i++)
-        {
-            arrived.push_back(false);
-            receiveBuffer.push_back("");
-            sendBuffer.push_back("");
-            timeout.push_back(NULL);
-        }
+        getMessageFiles();
+        createTable(files.size());
+        numEndInHub = 0;
+        notifyNodes(table[0]); // Notify first pairs to talk
+        table.erase(table.begin());
     }
 }
 
@@ -209,9 +211,32 @@ void Node::handleMessage(cMessage *cmsg)
     // Hub
     if (strcmp(getName(), "hub") == 0)
     {
-        // messageName -> receiver, messagePayload -> line,
-        bubble(msg->getPayload());
-        send(msg, "outs", atoi(msg->getName()));
+        if (msg->getType() != endEnum)
+        {
+            // messageName -> receiver, messagePayload -> line,
+            bubble(msg->getPayload());
+            send(msg, "outs", atoi(msg->getName()));
+        }
+        else
+        {
+            EV << "One node ended\n";
+            numEndInHub++;
+            send(msg, "outs", atoi(msg->getName()));
+            if (numEndInHub >= 2)
+            {
+                EV << "End Pair";
+                if (!table.empty())
+                {
+                    numEndInHub = 0;
+                    notifyNodes(table[0]);
+                    table.erase(table.begin());
+                }
+                else
+                {
+                    EV << "Transmission done for all nodes!!!\n";
+                }
+            }
+        }
     }
     // For all nodes except hub
     else
@@ -220,47 +245,76 @@ void Node::handleMessage(cMessage *cmsg)
         {
         case tableEnum: // Receive (receiver and file to read from)
         {
+            frameExpected = 0;
+            ackExpected = 0;
+            nextFrameToSend = 0;
+            tooFar = windowSize;
+            lastAck = 0;
+            receiver = -1;
+            noNak = true;
+            nBuffered = 0;
+            oldestFrame = maxSeq + 1;
+            ackTimeout = NULL;
+            stopSendingData = false;
+            numSelfMsg = 1;
+            arrived.clear();
+            receiveBuffer.clear();
+            sendBuffer.clear();
+            timeout.clear();
+            for (int i = 0; i < windowSize; i++)
+            {
+                arrived.push_back(false);
+                receiveBuffer.push_back("");
+                sendBuffer.push_back("");
+                timeout.push_back(NULL);
+            }
             vector<string> stringArray;
-            stringstream s(msg->getName());
+            string name = msg->getName();
+            stringstream ss;
+            ss << name;
             string value;
-            while (getline(s, value, '-'))
+            while (getline(ss, value, '-'))
             {
                 stringArray.push_back(value);
             }
-            receiver = atoi(stringArray[0].c_str());  // Get the receiver index
-            lines = readFile(stringArray[1].c_str()); // Get lines from file
-            UserMsg_Base *selfMsg = new UserMsg_Base();
-            selfMsg->setType(selfMsgEnum);                                 // Set type to be self message
-            scheduleAt(simTime() + atoi(stringArray[2].c_str()), selfMsg); // Send self msg at the time generated by hub
+            receiver = atoi(stringArray[0].c_str()); // Get the receiver index
+            if (stringArray.size() > 1)
+            {
+                EV << "Node #" << getIndex() << " will send file \"" << stringArray[1] << "\" to node #" << stringArray[0] << " \n";
+                readFile(stringArray[1].c_str()); // Get lines from file
+                UserMsg_Base *selfMsg = new UserMsg_Base();
+                selfMsg->setType(selfMsgEnum);           // Set type to be self message
+                scheduleAt(simTime() + margin, selfMsg); // Send self msg at the time generated by hub + margin
+            }
+            else
+            {
+                sendFrame(endEnum, 0, 0);
+            }
             break;
         }
         case selfMsgEnum: // Read first windwoSize lines from lines to send buffer and send them
         {
-            while (!lines.empty() && nBuffered <= windowSize)
-            {
-                nBuffered++;
-                sendBuffer[nextFrameToSend % windowSize] = lines[0];
-                lines.erase(lines.begin());
-                sendFrame(dataEnum, nextFrameToSend, frameExpected);
-                inc(nextFrameToSend);
-            }
+            nBuffered++;
+            numSelfMsg--;
+            sendBuffer[nextFrameToSend % windowSize] = lines[0];
+            lines.erase(lines.begin());
+            sendFrame(dataEnum, nextFrameToSend, frameExpected);
+            inc(nextFrameToSend);
             break;
         }
         case dataEnum: // Receive message
         {
-            if ((msg->getLine_nr() != frameExpected) && noNak)
+            EV << "Node #" << getIndex() << " received \"" << msg->getPayload() << "\" with SQN = " << msg->getLine_nr() << " and ACK = " << msg->getLine_expected() << " \n";
+            if ((msg->getLine_nr() != frameExpected) && noNak) // If we received not expected frame then send Nak to expected frame
             {
-                UserMsg_Base *newMsg = new UserMsg_Base("");
-                newMsg->setType(nakEnum);
-                newMsg->setLine_expected(frameExpected); // TODO: Send frame expected in noisy channel
                 sendFrame(nakEnum, 0, frameExpected);
             }
-            else
+            else // If we received the expected frame reset ackTimer
             {
                 startAckTimer();
             }
             if (between(frameExpected, msg->getLine_nr(), tooFar) && arrived[msg->getLine_nr() % windowSize] == false)
-            {
+            { // If we got what we expected move the receiver window
                 arrived[msg->getLine_nr() % windowSize] = true;
                 receiveBuffer[msg->getLine_nr() % windowSize] = msg->getPayload();
                 while (arrived[frameExpected % windowSize])
@@ -273,28 +327,21 @@ void Node::handleMessage(cMessage *cmsg)
                     startAckTimer();
                 }
             }
-            while (between(ackExpected, msg->getLine_expected(), nextFrameToSend))
+            while (between(ackExpected, msg->getLine_expected(), nextFrameToSend)) // Move sender window if we got ack of the oldest element
             {
                 nBuffered--;
                 stopTimer(ackExpected % windowSize);
                 inc(ackExpected);
-                if (!lines.empty()) // If there is a message in the network layer then add it to send buffer
-                {
-                    nBuffered++;
-                    // Add line to the send buffer and remove it from window lines vector (network layer)
-                    sendBuffer[nextFrameToSend % windowSize] = lines[0];
-                    lines.erase(lines.begin());
-                    sendFrame(dataEnum, nextFrameToSend, frameExpected);
-                    inc(nextFrameToSend);
-                }
             }
             break;
         }
         case nakEnum:
         {
+            EV << "Node #" << getIndex() << " received NAK with ACK = "
+               << msg->getLine_expected() << " \n";
             if (between(ackExpected, (msg->getLine_expected() + 1) % (maxSeq + 1), nextFrameToSend))
             {
-                sendFrame(dataEnum, (msg->getLine_expected() + 1) % (maxSeq + 1), frameExpected); // Send frame that we recevied nak for
+                sendFrame(dataEnum, (msg->getLine_expected() + 1) % (maxSeq + 1), frameExpected); // Send frame that we received nak for
             }
             while (between(ackExpected, msg->getLine_expected(), nextFrameToSend))
             {
@@ -306,7 +353,7 @@ void Node::handleMessage(cMessage *cmsg)
         }
         case timeOutEnum:
         {
-            sendFrame(dataEnum, oldestFrame, frameExpected);
+            sendFrame(dataEnum, msg->getLine_nr(), frameExpected);
             break;
         }
         case ackTimeOutEnum:
@@ -314,16 +361,39 @@ void Node::handleMessage(cMessage *cmsg)
             sendFrame(ackEnum, 0, frameExpected);
             break;
         }
+        case ackEnum:
+        {
+            EV << "Node #" << getIndex() << " received ACK with ACK = "
+               << msg->getLine_expected() << " \n";
+            while (between(ackExpected, msg->getLine_expected(), nextFrameToSend)) // Move sender window if we got ack of the oldest element
+            {
+                nBuffered--;
+                stopTimer(ackExpected % windowSize);
+                inc(ackExpected);
+            }
+            break;
+        }
+        case endEnum:
+        {
+            stopAckTimer();
+            break;
+        }
         default:
             break;
         }
-        while (!lines.empty() && nBuffered <= windowSize)
+        if (nBuffered < windowSize && msg->getType() != tableEnum && numSelfMsg < int(lines.size()) && lastSend != simTime())
         {
-            nBuffered++;
-            sendBuffer[nextFrameToSend % windowSize] = lines[0];
-            lines.erase(lines.begin());
-            sendFrame(dataEnum, nextFrameToSend, frameExpected);
-            inc(nextFrameToSend);
+            lastSend = simTime();
+            UserMsg_Base *newMsg = new UserMsg_Base("");
+            newMsg->setType(selfMsgEnum);
+            numSelfMsg++;
+            scheduleAt(simTime() + 1, newMsg);
+        }
+        if (lines.empty() && nBuffered == 0 && !stopSendingData)
+        {
+            EV << "End, Node: " << getIndex() << endl;
+            sendFrame(endEnum, 0, 0);
+            stopSendingData = true;
         }
     }
 }
