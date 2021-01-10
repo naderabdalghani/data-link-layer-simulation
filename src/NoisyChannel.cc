@@ -15,7 +15,6 @@ void NoisyChannel::initialize()
     channelBusySignal = registerSignal("channelBusy");
     messageSentSignal = registerSignal("messageSent");
     messageDiscardedSignal = registerSignal("messageDiscarded");
-    emit(channelBusySignal, 0);
 }
 
 void NoisyChannel::rereadPars()
