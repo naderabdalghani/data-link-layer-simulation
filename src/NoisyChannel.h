@@ -2,6 +2,7 @@
 #define NOISYCHANNEL_H_
 
 #include <omnetpp/cchannel.h>
+#include "UserMsg_m.h"
 using namespace omnetpp;
 
 
@@ -13,6 +14,7 @@ private:
     simtime_t txFinishTime;
     double delayProbability;
     double discardingProbability;
+    double modificationProbability;
 
     void checkState() const  {
         if (!parametersFinalized()) throw cRuntimeError(this, E_PARAMSNOTREADY);

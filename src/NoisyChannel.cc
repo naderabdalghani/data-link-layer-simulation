@@ -23,13 +23,16 @@ void NoisyChannel::rereadPars()
     delayMax = par("delayMax").doubleValue();
     delayProbability = par("delayProbability").doubleValue();
     discardingProbability = par("discardingProbability").doubleValue();
+    modificationProbability = par("modificationProbability").doubleValue();
     if (delayMin < 0 ||
         delayMax < 0 ||
         delayMin > delayMax ||
         delayProbability < 0 ||
         delayProbability > 100 ||
         discardingProbability < 0 ||
-        discardingProbability > 100
+        discardingProbability > 100 ||
+        modificationProbability < 0 ||
+        modificationProbability > 100
         )
         throw cRuntimeError(this, "Invalid channel parameter(s)");
 }
@@ -67,6 +70,16 @@ void NoisyChannel::processMessage(cMessage *msg, simtime_t t, result_t& result) 
         result.delay = uniform(delayMin, delayMax);
         txFinishTime = t + result.delay;
         EV << "Message delayed with value = " << result.delay << endl;
+    }
+    rand = uniform(0, 100);
+    if (rand <= modificationProbability) {
+        UserMsg_Base *userMsg = check_and_cast<UserMsg_Base *>(msg);
+        string payload = userMsg->getPayload();
+        int randIndex = uniform(0, payload.length());
+        payload[randIndex] = payload[randIndex] == '0' ? '1' : '0';
+        userMsg->setPayload(payload);
+        msg = userMsg;
+        EV << "Message modified" << endl;
     }
     if (mayHaveListeners(messageSentSignal)) {
         MessageSentSignalValue tmp(t, msg, &result);

@@ -8,4 +8,5 @@ channel NoisyChannel
         double delayMax = default(5.0);
         double delayProbability = default(50.0);
         double discardingProbability = default(50.0);
+        double modificationProbability = default(50.0);
 }

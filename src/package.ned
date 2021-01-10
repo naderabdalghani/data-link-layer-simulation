@@ -12,7 +12,7 @@ network CentralizedNetwork
         hub: Node;
     connections:
         for i=0..sizeof(nodes)-1 {
-            nodes[i].outs++ --> IdealChannel --> hub.ins++;
+            nodes[i].outs++ --> NoisyChannel --> hub.ins++;
             hub.outs++ --> IdealChannel --> nodes[i].ins++;
         }
 }
