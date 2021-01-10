@@ -1,4 +1,5 @@
 #include "NoisyChannel.h"
+using namespace std;
 
 Define_Channel(NoisyChannel);
 
@@ -77,7 +78,7 @@ void NoisyChannel::processMessage(cMessage *msg, simtime_t t, result_t& result) 
         string payload = userMsg->getPayload();
         int randIndex = uniform(0, payload.length());
         payload[randIndex] = payload[randIndex] == '0' ? '1' : '0';
-        userMsg->setPayload(payload);
+        userMsg->setPayload(payload.c_str());
         msg = userMsg;
         EV << "Message modified" << endl;
     }
