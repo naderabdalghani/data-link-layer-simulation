@@ -20,15 +20,10 @@ private:
         if (!parametersFinalized()) throw cRuntimeError(this, E_PARAMSNOTREADY);
     }
 protected:
-    static simsignal_t channelBusySignal;
-    static simsignal_t messageSentSignal;
-    static simsignal_t messageDiscardedSignal;
     void rereadPars();
     virtual void handleParameterChange(const char *parname) override;
-    virtual void finish() override;
 public:
     explicit NoisyChannel(const char *name=nullptr);
-    virtual void initialize() override;
     virtual void processMessage(cMessage *msg, simtime_t t, result_t& result) override;
     virtual bool isTransmissionChannel() const override;
     virtual simtime_t getTransmissionFinishTime() const override;

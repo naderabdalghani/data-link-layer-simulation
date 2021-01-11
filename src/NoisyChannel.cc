@@ -3,19 +3,8 @@ using namespace std;
 
 Define_Channel(NoisyChannel);
 
-simsignal_t NoisyChannel::channelBusySignal;
-simsignal_t NoisyChannel::messageSentSignal;
-simsignal_t NoisyChannel::messageDiscardedSignal;
-
 NoisyChannel::NoisyChannel(const char *name) : cChannel(name) {
     txFinishTime = -1;
-}
-
-void NoisyChannel::initialize()
-{
-    channelBusySignal = registerSignal("channelBusy");
-    messageSentSignal = registerSignal("messageSent");
-    messageDiscardedSignal = registerSignal("messageDiscarded");
 }
 
 void NoisyChannel::rereadPars()
@@ -41,11 +30,6 @@ void NoisyChannel::rereadPars()
 void NoisyChannel::handleParameterChange(const char *)
 {
     rereadPars();
-}
-
-void NoisyChannel::finish()
-{
-
 }
 
 void NoisyChannel::processMessage(cMessage *msg, simtime_t t, result_t& result) {
