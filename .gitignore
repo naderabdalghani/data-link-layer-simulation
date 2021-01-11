@@ -88,5 +88,7 @@ local.properties
 .scala_dependencies
 .worksheet
 
-# OMNeT++ output older
+# OMNeT++
 out/
+.qtenvrc
+data-link-layer-simulation_dbg
