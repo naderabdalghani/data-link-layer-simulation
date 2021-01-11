@@ -45,25 +45,15 @@ void NoisyChannel::handleParameterChange(const char *)
 
 void NoisyChannel::finish()
 {
-    if (txFinishTime != -1 && mayHaveListeners(channelBusySignal)) {
-        cTimestampedValue tmp(txFinishTime, 0L);
-        emit(channelBusySignal, &tmp);
-    }
+
 }
 
 void NoisyChannel::processMessage(cMessage *msg, simtime_t t, result_t& result) {
     double rand = uniform(0, 100);
     if (rand <= discardingProbability) {
         result.discard = true;
-        cTimestampedValue tmp(t, msg);
-        emit(messageDiscardedSignal, &tmp);
         EV << "Message discarded" << endl;
         return;
-    }
-
-    if (txFinishTime != -1 && mayHaveListeners(channelBusySignal)) {
-        cTimestampedValue tmp(txFinishTime, 0L);
-        emit(channelBusySignal, &tmp);
     }
 
     rand = uniform(0, 100);
@@ -81,10 +71,6 @@ void NoisyChannel::processMessage(cMessage *msg, simtime_t t, result_t& result) 
         userMsg->setPayload(payload.c_str());
         msg = userMsg;
         EV << "Message modified" << endl;
-    }
-    if (mayHaveListeners(messageSentSignal)) {
-        MessageSentSignalValue tmp(t, msg, &result);
-        emit(messageSentSignal, &tmp);
     }
 }
 
