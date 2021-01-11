@@ -3,6 +3,8 @@ using namespace std;
 
 Define_Channel(NoisyChannel);
 
+int endEnum = 7;
+
 NoisyChannel::NoisyChannel(const char *name) : cChannel(name) {
     txFinishTime = -1;
 }
@@ -33,8 +35,9 @@ void NoisyChannel::handleParameterChange(const char *)
 }
 
 void NoisyChannel::processMessage(cMessage *msg, simtime_t t, result_t& result) {
+    UserMsg_Base *userMsg = check_and_cast<UserMsg_Base *>(msg);
     double rand = uniform(0, 100);
-    if (rand <= discardingProbability) {
+    if (rand <= discardingProbability && userMsg->getType() != endEnum) {
         result.discard = true;
         EV << "Message discarded" << endl;
         return;
