@@ -56,7 +56,7 @@ void castBitsIntoMsg(UserMsg_Base *msg)
 {
     // First 8 bits -> line number, second 8 -> line expected, third part -> payload
     string strTmp = msg->getPayload();
-    msg->setLine_nr(bitset<8>(strTmp.substr(0, 8)).to_ulong()); // Line number
+    msg->setLine_nr(bitset<8>(strTmp.substr(0, 8)).to_ulong());       // Line number
     msg->setLine_expected(bitset<8>(strTmp.substr(8, 8)).to_ulong()); // Line expected
     int index = 16;
     string payload;
@@ -69,6 +69,12 @@ void castBitsIntoMsg(UserMsg_Base *msg)
     msg->setPayload(payload.c_str());
 }
 // ----------------------------------------------------------------------------------------------------------------------------
+
+// ------------------------------------------------------- log data functions -----------------------------------------------
+
+// --------------------------------------------------------------------------------------------------------------------------
+
+// -------------------------------------------------------------------------------------------------------------------------
 
 // -------------------------------------------------- Bit stuffing and Hamming functions --------------------------------------
 string bitStuff(string msg)
@@ -313,6 +319,7 @@ void Node::sendFrame(int frameType, int frameNum, int frameExp)
     newMsg->setLine_expected((frameExp + maxSeq) % (maxSeq + 1));
     if (frameType == dataEnum)
     {
+        dataTransmittedFrames++;
         newMsg->setPayload(sendBuffer[frameNum % windowSize].c_str());
         EV << "Node #" << getIndex() << " send \"" << newMsg->getPayload() << "\" with SQN = " << newMsg->getLine_nr() << " and ACK = " << newMsg->getLine_expected() << " \n";
     }
@@ -329,18 +336,27 @@ void Node::sendFrame(int frameType, int frameNum, int frameExp)
     {
         EV << "Node #" << getIndex() << " sent ACK = " << newMsg->getLine_expected() << " \n";
     }
+    if (frameType == endEnum)
+    {
+        string tmpStr = newMsg->getName();
+        tmpStr += "-" + to_string(reTransmitedFrames) + "-" + to_string(generatedFrames) + "-" + to_string(dataTransmittedFrames);
+        newMsg->setName(tmpStr.c_str());
+    }
     if (frameType != endEnum)
         stopAckTimer();
     string payload = castMsgIntoBits(newMsg); // Set payload as a bit string and send the message
-    payload = hammingCode(payload);           // Apply Hamming code
     payload = bitStuff(payload);
+    payload = hammingCode(payload); // Apply Hamming code
     newMsg->setPayload(payload.c_str());
     double rand = uniform(0, 100);
-    if (rand <= par("duplicatingProbability").doubleValue()) {
+    if (rand <= par("duplicatingProbability").doubleValue())
+    {
         UserMsg_Base *duplicateMsg = newMsg->dup();
+        generatedFrames++;
         send(duplicateMsg, "outs", 0);
         EV << "Message duplicated" << endl;
     }
+    generatedFrames++;
     send(newMsg, "outs", 0);
 }
 
@@ -446,6 +462,9 @@ void Node::initialize()
         notifyNodes(table[0]); // Notify first pairs to talk
         table.erase(table.begin());
     }
+    reTransmitedFrames = 0;
+    dataTransmittedFrames = 0;
+    generatedFrames = 0;
 }
 
 void Node::handleMessage(cMessage *cmsg)
@@ -462,13 +481,27 @@ void Node::handleMessage(cMessage *cmsg)
         }
         else
         {
-            if (lastEndReceiver != atoi(msg->getName())) {
+            vector<string> stringArray;
+            string name = msg->getName();
+            stringstream ss;
+            ss << name;
+            string value;
+            while (getline(ss, value, '-'))
+            {
+                stringArray.push_back(value);
+            }
+            if (lastEndReceiver != atoi(stringArray[0].c_str()))
+            {
+                reTransmitedFrames += atoi(stringArray[1].c_str());
+                generatedFrames += atoi(stringArray[2].c_str());
+                dataTransmittedFrames += atoi(stringArray[3].c_str());
+
                 EV << "One node ended\n";
                 numEndInHub++;
-                send(msg, "outs", atoi(msg->getName()));
+                send(msg, "outs", atoi(stringArray[0].c_str()));
                 if (numEndInHub >= 2)
                 {
-                    EV << "End Pair";
+                    EV << "End Pair\n";
                     if (!table.empty())
                     {
                         numEndInHub = 0;
@@ -477,10 +510,15 @@ void Node::handleMessage(cMessage *cmsg)
                     }
                     else
                     {
-                        EV << "Transmission done for all nodes!!!\n";
+                        EV << "------------------------------ Transmission done for all nodes!!! -------------------------------\n";
+                        EV << "reTransmitedFrames = " << reTransmitedFrames << endl;
+                        EV << "generatedFrames = " << generatedFrames << endl;
+                        EV << "dataTransmittedFrames = " << dataTransmittedFrames << endl;
+                        EV << "dataTransmittedFrames/totalFrames% = " << float(dataTransmittedFrames) / generatedFrames * 100 << "%" << endl;
+                        EV << "numberOfDroppedFrames = " << NoisyChannel::numberOfDiscardedMsgs << endl;
                     }
                 }
-                lastEndReceiver = atoi(msg->getName());
+                lastEndReceiver = atoi(stringArray[0].c_str());
             }
         }
     }
@@ -490,8 +528,6 @@ void Node::handleMessage(cMessage *cmsg)
         string payload = msg->getPayload();
         if (payload.size() > 2 * frame.size())
         {
-            payload = payload.substr(frame.size(), payload.size() - 2 * frame.size()); // Remove frames
-            payload = inverseBitStuff(payload);
             int t = checkHamming(payload); // Location of the wrong bit
             if (t != 0 && t < int(payload.size()))
             {
@@ -502,7 +538,9 @@ void Node::handleMessage(cMessage *cmsg)
             {
                 EV << "Corrupted frame\n";
             }
-            payload = removeHamming(payload); // Remove added bits for hamming
+            payload = removeHamming(payload);                                          // Remove added bits for hamming
+            payload = payload.substr(frame.size(), payload.size() - 2 * frame.size()); // Remove frames
+            payload = inverseBitStuff(payload);
             msg->setPayload(payload.c_str());
             castBitsIntoMsg(msg); // Get the msg data
         }
@@ -591,7 +629,7 @@ void Node::handleMessage(cMessage *cmsg)
                     arrived[frameExpected % windowSize] = false;
                     inc(frameExpected);
                     inc(tooFar);
-                    startAckTimer();
+                    //startAckTimer();
                 }
             }
             while (between(ackExpected, msg->getLine_expected(), nextFrameToSend)) // Move sender window if we got ack of the oldest element
@@ -604,6 +642,7 @@ void Node::handleMessage(cMessage *cmsg)
         }
         case nakEnum:
         {
+            reTransmitedFrames++;
             EV << "Node #" << getIndex() << " received NAK with ACK = "
                << msg->getLine_expected() << " \n";
             if (between(ackExpected, (msg->getLine_expected() + 1) % (maxSeq + 1), nextFrameToSend))
@@ -620,6 +659,7 @@ void Node::handleMessage(cMessage *cmsg)
         }
         case timeOutEnum:
         {
+            reTransmitedFrames++;
             sendFrame(dataEnum, msg->getLine_nr(), frameExpected);
             break;
         }

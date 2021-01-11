@@ -32,10 +32,14 @@ private:
   bool stopSendingData;           // Stop sending data from node
   int numSelfMsg;                 // Number of self msg sent by the node
   simtime_t lastSend;             // The last message scheduled to be sent
-  int lastEndReceiver;          // Carries the id of the last receiver to receive an end signal
+  int lastEndReceiver;            // Carries the id of the last receiver to receive an end signal
+  int reTransmitedFrames;         // Number of retransmitted frames
+  int generatedFrames;            // Total number of generated frames by te node
+  int dataTransmittedFrames;      // Number of data transmitted frames
 
 protected:
-  virtual void initialize();
+  virtual void
+  initialize();
   virtual void handleMessage(cMessage *msg);
   void getMessageFiles();
   void createTable(int filesCount);
