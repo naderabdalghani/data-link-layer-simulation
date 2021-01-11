@@ -51,7 +51,6 @@ void NoisyChannel::processMessage(cMessage *msg, simtime_t t, result_t& result) 
     }
     rand = uniform(0, 100);
     if (rand <= modificationProbability) {
-        UserMsg_Base *userMsg = check_and_cast<UserMsg_Base *>(msg);
         string payload = userMsg->getPayload();
         int randIndex = uniform(0, payload.length());
         payload[randIndex] = payload[randIndex] == '0' ? '1' : '0';
