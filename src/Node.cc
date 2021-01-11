@@ -13,6 +13,7 @@ float maxTimeLimitAck = 2;                            // Time limit for receivin
 float maxTimeLimitNak = 3;                            // Time limit for receiving nak
 int margin = 1;                                       // Margin time
 string frame = "10000001";                            // Start and end frames
+int NoisyChannel::numberOfDiscardedMsgs = 0;
 
 typedef enum
 {

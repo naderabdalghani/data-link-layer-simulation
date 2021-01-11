@@ -23,6 +23,7 @@ protected:
     void rereadPars();
     virtual void handleParameterChange(const char *parname) override;
 public:
+    static int numberOfDiscardedMsgs;
     explicit NoisyChannel(const char *name=nullptr);
     virtual void processMessage(cMessage *msg, simtime_t t, result_t& result) override;
     virtual bool isTransmissionChannel() const override;

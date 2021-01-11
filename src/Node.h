@@ -3,6 +3,7 @@
 
 #include <omnetpp.h>
 #include "UserMsg_m.h"
+#include "NoisyChannel.h"
 
 using namespace omnetpp;
 using namespace std;

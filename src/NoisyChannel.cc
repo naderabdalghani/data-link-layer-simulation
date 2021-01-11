@@ -40,6 +40,7 @@ void NoisyChannel::processMessage(cMessage *msg, simtime_t t, result_t& result) 
     if (rand <= discardingProbability && userMsg->getType() != endEnum) {
         result.discard = true;
         EV << "Message discarded" << endl;
+        numberOfDiscardedMsgs++;
         return;
     }
 
