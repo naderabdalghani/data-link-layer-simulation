@@ -4,4 +4,5 @@ packet UserMsg {
     string payload;
     int line_nr;
     int line_expected;
+    bool waiting;
 }

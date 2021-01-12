@@ -50,6 +50,7 @@ protected:
   void sendFrame(int frameType, int frameNum, int frameExp);
   void startTimer(int index, int frameNumber); // Sender
   void stopTimer(int index);                   // Sender
+  void checkAndSend(UserMsg_Base *msg);
 };
 
 #endif

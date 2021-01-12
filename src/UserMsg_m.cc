@@ -182,6 +182,7 @@ UserMsg_Base::UserMsg_Base(const char *name, short kind) : ::omnetpp::cPacket(na
     this->type = 0;
     this->line_nr = 0;
     this->line_expected = 0;
+    this->waiting = false;
 }
 
 UserMsg_Base::UserMsg_Base(const UserMsg_Base& other) : ::omnetpp::cPacket(other)
@@ -207,6 +208,7 @@ void UserMsg_Base::copy(const UserMsg_Base& other)
     this->payload = other.payload;
     this->line_nr = other.line_nr;
     this->line_expected = other.line_expected;
+    this->waiting = other.waiting;
 }
 
 void UserMsg_Base::parsimPack(omnetpp::cCommBuffer *b) const
@@ -216,6 +218,7 @@ void UserMsg_Base::parsimPack(omnetpp::cCommBuffer *b) const
     doParsimPacking(b,this->payload);
     doParsimPacking(b,this->line_nr);
     doParsimPacking(b,this->line_expected);
+    doParsimPacking(b,this->waiting);
 }
 
 void UserMsg_Base::parsimUnpack(omnetpp::cCommBuffer *b)
@@ -225,6 +228,7 @@ void UserMsg_Base::parsimUnpack(omnetpp::cCommBuffer *b)
     doParsimUnpacking(b,this->payload);
     doParsimUnpacking(b,this->line_nr);
     doParsimUnpacking(b,this->line_expected);
+    doParsimUnpacking(b,this->waiting);
 }
 
 int UserMsg_Base::getType() const
@@ -265,6 +269,16 @@ int UserMsg_Base::getLine_expected() const
 void UserMsg_Base::setLine_expected(int line_expected)
 {
     this->line_expected = line_expected;
+}
+
+bool UserMsg_Base::getWaiting() const
+{
+    return this->waiting;
+}
+
+void UserMsg_Base::setWaiting(bool waiting)
+{
+    this->waiting = waiting;
 }
 
 class UserMsgDescriptor : public omnetpp::cClassDescriptor
@@ -333,7 +347,7 @@ const char *UserMsgDescriptor::getProperty(const char *propertyname) const
 int UserMsgDescriptor::getFieldCount() const
 {
     omnetpp::cClassDescriptor *basedesc = getBaseClassDescriptor();
-    return basedesc ? 4+basedesc->getFieldCount() : 4;
+    return basedesc ? 5+basedesc->getFieldCount() : 5;
 }
 
 unsigned int UserMsgDescriptor::getFieldTypeFlags(int field) const
@@ -349,8 +363,9 @@ unsigned int UserMsgDescriptor::getFieldTypeFlags(int field) const
         FD_ISEDITABLE,
         FD_ISEDITABLE,
         FD_ISEDITABLE,
+        FD_ISEDITABLE,
     };
-    return (field>=0 && field<4) ? fieldTypeFlags[field] : 0;
+    return (field>=0 && field<5) ? fieldTypeFlags[field] : 0;
 }
 
 const char *UserMsgDescriptor::getFieldName(int field) const
@@ -366,8 +381,9 @@ const char *UserMsgDescriptor::getFieldName(int field) const
         "payload",
         "line_nr",
         "line_expected",
+        "waiting",
     };
-    return (field>=0 && field<4) ? fieldNames[field] : nullptr;
+    return (field>=0 && field<5) ? fieldNames[field] : nullptr;
 }
 
 int UserMsgDescriptor::findField(const char *fieldName) const
@@ -378,6 +394,7 @@ int UserMsgDescriptor::findField(const char *fieldName) const
     if (fieldName[0]=='p' && strcmp(fieldName, "payload")==0) return base+1;
     if (fieldName[0]=='l' && strcmp(fieldName, "line_nr")==0) return base+2;
     if (fieldName[0]=='l' && strcmp(fieldName, "line_expected")==0) return base+3;
+    if (fieldName[0]=='w' && strcmp(fieldName, "waiting")==0) return base+4;
     return basedesc ? basedesc->findField(fieldName) : -1;
 }
 
@@ -394,8 +411,9 @@ const char *UserMsgDescriptor::getFieldTypeString(int field) const
         "string",
         "int",
         "int",
+        "bool",
     };
-    return (field>=0 && field<4) ? fieldTypeStrings[field] : nullptr;
+    return (field>=0 && field<5) ? fieldTypeStrings[field] : nullptr;
 }
 
 const char **UserMsgDescriptor::getFieldPropertyNames(int field) const
@@ -466,6 +484,7 @@ std::string UserMsgDescriptor::getFieldValueAsString(void *object, int field, in
         case 1: return oppstring2string(pp->getPayload());
         case 2: return long2string(pp->getLine_nr());
         case 3: return long2string(pp->getLine_expected());
+        case 4: return bool2string(pp->getWaiting());
         default: return "";
     }
 }
@@ -484,6 +503,7 @@ bool UserMsgDescriptor::setFieldValueAsString(void *object, int field, int i, co
         case 1: pp->setPayload((value)); return true;
         case 2: pp->setLine_nr(string2long(value)); return true;
         case 3: pp->setLine_expected(string2long(value)); return true;
+        case 4: pp->setWaiting(string2bool(value)); return true;
         default: return false;
     }
 }

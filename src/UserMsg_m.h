@@ -28,6 +28,7 @@
  *     string payload;
  *     int line_nr;
  *     int line_expected;
+ *     bool waiting;
  * }
  * </pre>
  *
@@ -62,6 +63,7 @@ class UserMsg_Base : public ::omnetpp::cPacket
     ::omnetpp::opp_string payload;
     int line_nr;
     int line_expected;
+    bool waiting;
 
   private:
     void copy(const UserMsg_Base& other);
@@ -91,6 +93,8 @@ class UserMsg_Base : public ::omnetpp::cPacket
     virtual void setLine_nr(int line_nr);
     virtual int getLine_expected() const;
     virtual void setLine_expected(int line_expected);
+    virtual bool getWaiting() const;
+    virtual void setWaiting(bool waiting);
 };
 
 

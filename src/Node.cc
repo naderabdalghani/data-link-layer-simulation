@@ -9,8 +9,8 @@
 const char *messagesDirectory = "./../src/messages/"; // Messages directory
 int maxSeq = 7;                                       // Max sequence
 int windowSize = (maxSeq + 1) / 2;                    // Windows size
-float maxTimeLimitAck = 2;                            // Time limit for receiving ack
-float maxTimeLimitNak = 3;                            // Time limit for receiving nak
+float maxTimeLimitAck = 5;                            // Time limit for receiving ack
+float maxTimeLimitNak = 5;                            // Time limit for receiving nak
 int margin = 1;                                       // Margin time
 string frame = "10000001";                            // Start and end frames
 int NoisyChannel::numberOfDiscardedMsgs = 0;
@@ -353,11 +353,25 @@ void Node::sendFrame(int frameType, int frameNum, int frameExp)
     {
         UserMsg_Base *duplicateMsg = newMsg->dup();
         generatedFrames++;
-        send(duplicateMsg, "outs", 0);
+        checkAndSend(duplicateMsg);
         EV << "Message duplicated" << endl;
     }
     generatedFrames++;
-    send(newMsg, "outs", 0);
+    checkAndSend(newMsg);
+}
+
+void Node::checkAndSend(UserMsg_Base *msg) {
+    UserMsg_Base *newMsg = msg->dup();
+    delete msg;
+    cGate *outGate = gate("outs", 0);
+    if (outGate->getChannel()->isBusy()) {
+        newMsg->setWaiting(true);
+        scheduleAt(outGate->getChannel()->getTransmissionFinishTime(),  newMsg);
+    }
+    else {
+        newMsg->setWaiting(false);
+        send(newMsg, "outs", 0);
+    }
 }
 
 // Returns all file names in messages directory
@@ -525,6 +539,11 @@ void Node::handleMessage(cMessage *cmsg)
     // For all nodes except hub
     else
     {
+        if (msg->getWaiting()) {
+            msg->setLine_expected(frameExpected);
+            checkAndSend(msg);
+            return;
+        }
         string payload = msg->getPayload();
         if (payload.size() > 2 * frame.size())
         {
