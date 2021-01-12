@@ -20,7 +20,7 @@
   - [Data Framing](#data-framing)
   - [Transmission Channel](#transmission-channel)
   - [Built With](#built-with)
-- [Shortcomings](#shortcomings)
+  - [Shortcomings](#shortcomings)
 - [Contributors](#contributors)
 
 ## About The Project
@@ -72,6 +72,13 @@ An OMNeT++ class named `​NoisyChannel​` was created for the purpose of havin
 
 Noise can be applied in four different forms, it can be a modification to a single bit of the sent frame, a whole frame getting lost, a frame sent twice or a frame getting delayed. Each type of noise has a probability of occurring equal to its corresponding probability value in the [`omnetpp.ini`](simulations/omnetpp.ini) file. As for the delay amount and the index of the bit to be modified, they are generated using a uniform probability distribution with bounds found in the omnetpp.ini file in case of a delay error or inferred from the sent message in case of a modification error.
 
+### Shortcomings
+
+This implementation suffers from the following drawbacks which can be fixed in future iterations:
+
+- High discarding probability (~>50%) is not tolerated by the network and leads to a segmentation error.
+- Nodes aren't allowed to send data on busy transmission channels.
+
 ### Built With
 
 - [OMNeT++ Discrete Event Simulator](https://omnetpp.org/)
@@ -79,8 +86,15 @@ Noise can be applied in four different forms, it can be a modification to a sing
 ## Contributors
 
 * [Marc Nagui](https://github.com/MarcNagui)
-* [Mahmoud Mohamad](https://github.com/mmmacmp)
-* [Muhanad Atef](https://github.com/Muhanad23)
+  - Hamming Codes
+  - Bit stuffing
+* [Mahmoud Mohamad](https://github.com/mmmacmp) and [Muhanad Atef](https://github.com/Muhanad23)
+  - Selective repeat protocol
+  - Centralized network architecture
 * [Nader AbdAlGhani](https://github.com/naderabdalghani)
-
+  - Transmission channel noise:
+    - Modification
+    - Loss
+    - Duplication
+    - Delay
 [network-simulation]: assets/network_simulation.gif
