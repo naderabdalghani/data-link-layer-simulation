@@ -97,4 +97,5 @@ This implementation suffers from the following drawbacks which can be fixed in f
     - Loss
     - Duplication
     - Delay
+
 [network-simulation]: assets/network_simulation.gif
