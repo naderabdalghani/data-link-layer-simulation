@@ -29,6 +29,7 @@ public:
     virtual bool isTransmissionChannel() const override;
     virtual simtime_t getTransmissionFinishTime() const override;
     virtual void forceTransmissionFinishTime(simtime_t t) override;
+    virtual bool isBusy() const override;
     virtual double getNominalDatarate() const override;
     virtual simtime_t calculateDuration(cMessage *msg) const override;
 };

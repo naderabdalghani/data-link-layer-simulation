@@ -45,10 +45,10 @@ void NoisyChannel::processMessage(cMessage *msg, simtime_t t, result_t& result) 
     }
 
     rand = uniform(0, 100);
+    SimTime delay = 0;
     if (rand <= delayProbability) {
-        result.delay = uniform(delayMin, delayMax);
-        txFinishTime = t + result.delay;
-        EV << "Message delayed with value = " << result.delay << endl;
+        delay = uniform(delayMin, delayMax);
+        EV << "Message delayed with value = " << delay << endl;
     }
     rand = uniform(0, 100);
     if (rand <= modificationProbability) {
@@ -59,9 +59,19 @@ void NoisyChannel::processMessage(cMessage *msg, simtime_t t, result_t& result) 
         msg = userMsg;
         EV << "Message modified" << endl;
     }
+    if (txFinishTime > t && txFinishTime > t + delay) {
+        result.delay = txFinishTime - t + delay;
+        txFinishTime = txFinishTime + delay;
+    }
+    else {
+        result.delay = delay;
+        txFinishTime = t + delay;
+    }
 }
 
-bool NoisyChannel::isTransmissionChannel() const { return true; }
+bool NoisyChannel::isBusy() const { return false; }
+
+bool NoisyChannel::isTransmissionChannel() const { return false; }
 
 simtime_t NoisyChannel::getTransmissionFinishTime() const { return txFinishTime; }
 
