@@ -88,7 +88,7 @@ This implementation suffers from the following drawbacks which can be fixed in f
 * [Marc Nagui](https://github.com/MarcNagui)
   - Hamming Codes
   - Bit stuffing
-* [Mahmoud Mohamad](https://github.com/mmmacmp) and [Muhanad Atef](https://github.com/Muhanad23)
+* [Mahmoud Mohamad](https://github.com/mmmacmp) and [Muhanad Atef](https://github.com/MuhanadAtef)
   - Selective repeat protocol
   - Centralized network architecture
 * [Nader AbdAlGhani](https://github.com/naderabdalghani)
